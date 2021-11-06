@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Servo.h>
+#include <lock.h>
 
 #define RST_PIN 2
 #define SS_PIN 8
@@ -9,20 +10,21 @@
 #define lockPin 9
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
-
-void printByteArray(byte *, byte);
-bool UIDisEqual(MFRC522::Uid, MFRC522::Uid);
-
 MFRC522::Uid card = {0x4, {0x2A, 0xB1, 0xF7, 0x56}, 0x8};
 
 Servo lock;
 bool lockState = false;
 
+long timeLock = millis();
+
+// function headers
+void printByteArray(byte *, byte);
+bool UidIsEqual(MFRC522::Uid, MFRC522::Uid);
+void setLocked();
+void setUnlocked();
+
 void setup() {
   // put your setup code here, to run once:
-  //card.size = 0x4;
-  //card.sak = 0x8;
-  //card.uidByte = {0x2A, 0xB1, 0xF7, 0x56};
   Serial.begin(9600);
   SPI.begin();
   mfrc522.PCD_Init();
@@ -33,7 +35,6 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-
 
   MFRC522::MIFARE_Key key;
   for (byte i = 0; i < 6; i++) {
@@ -61,8 +62,20 @@ void loop() {
   Serial.print("size : ");
   Serial.println(mfrc522.uid.size, HEX);
 
-  Serial.println(UIDisEqual(mfrc522.uid, card) ? "Match" : "No match");
+  bool cardMatch = UidIsEqual(mfrc522.uid, card);
 
+  Serial.println(cardMatch ? "Match" : "No match");
+  if (cardMatch) {
+    setUnlocked();
+    timeLock = millis();
+
+  } else {
+    setLocked();
+  }
+
+  if (!lockState && (millis() - timeLock > 10000)) {
+    setLocked();
+  }
 
 }
 
@@ -74,7 +87,7 @@ void printByteArray(byte *buffer, byte bufferSize) {
   Serial.println();
 }
 
-bool UIDisEqual(MFRC522::Uid uid1, MFRC522::Uid uid2)  {
+bool UidIsEqual(MFRC522::Uid uid1, MFRC522::Uid uid2)  {
 
 
   if (uid1.sak != uid2.sak || uid1.size != uid2.size) {
@@ -91,11 +104,12 @@ bool UIDisEqual(MFRC522::Uid uid1, MFRC522::Uid uid2)  {
   return result;
 }
 
-void toggle() {
-  if (lockState) {
-    lock.write(0);
-  } else {
-    lock.write(90);
-  }
-  lockState = !lockState;
+void setLocked() {
+  lock.write(90);
+  lockState = true;
+}
+
+void setUnlocked() {
+  lock.write(0);
+  lockState = false;
 }
